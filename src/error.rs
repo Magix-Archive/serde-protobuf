@@ -64,8 +64,8 @@ pub type CompatResult<A> = result::Result<A, CompatError>;
 #[derive(Debug, Error)]
 pub struct CompatError(#[from] Error);
 
-impl From<protobuf::error::ProtobufError> for Error {
-    fn from(e: protobuf::error::ProtobufError) -> Self {
+impl From<protobuf::ProtobufError> for Error {
+    fn from(e: protobuf::ProtobufError) -> Self {
         Error::Protobuf(e)
     }
 }

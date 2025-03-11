@@ -14,7 +14,7 @@ edition = "2018"
 [dependencies]
 linked-hash-map = "0.5.4"
 log = "0.4.14"
-protobuf = { git = "https://github.com/MaterializeInc/rust-protobuf.git" }
+protobuf = "3"
 serde = "1.0.125"
 thiserror = "1.0.24"
 

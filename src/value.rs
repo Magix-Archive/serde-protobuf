@@ -2,10 +2,13 @@
 use std::collections;
 
 use protobuf;
-use protobuf::wire_format;
+use protobuf::rt as wire_format;
 
 use crate::descriptor;
 use crate::error;
+
+const TAG_TYPE_BITS: u32 = 3;
+const TAG_TYPE_MASK: u32 = (1u32 << TAG_TYPE_BITS as usize) - 1;
 
 /// Any protobuf value.
 #[derive(Clone, Debug)]
@@ -84,14 +87,18 @@ impl Message {
         input: &mut protobuf::CodedInputStream,
     ) -> error::Result<()> {
         while !input.eof()? {
-            let (number, wire_type) = input.read_tag_unpack()?;
+            let (number, wire_type) = {
+                let v = input.read_raw_varint32()?;
+                (v >> TAG_TYPE_BITS, protobuf::rt::WireType::new(v & TAG_TYPE_MASK)
+                    .expect("bad wire type"))
+            };
 
             if let Some(field) = message.field_by_number(number as i32) {
                 let value = self.ensure_field(field);
                 value.merge_from(descriptors, field, input, wire_type)?;
             } else {
                 use protobuf::rt::read_unknown_or_skip_group as u;
-                u(number, wire_type, input, &mut self.unknown)?;
+                u(number, input, &mut self.unknown)?;
             }
         }
         Ok(())
@@ -123,11 +130,11 @@ impl Field {
         descriptors: &descriptor::Descriptors,
         field: &descriptor::FieldDescriptor,
         input: &mut protobuf::CodedInputStream,
-        wire_type: protobuf::wire_format::WireType,
+        wire_type: protobuf::rt::WireType,
     ) -> error::Result<()> {
         // Make the type dispatch below more compact
         use crate::descriptor::FieldType::*;
-        use protobuf::wire_format::WireType::*;
+        use protobuf::rt::WireType;
         use protobuf::CodedInputStream as I;
 
         // Singular scalar
@@ -161,21 +168,21 @@ impl Field {
         }
 
         match field.field_type(descriptors) {
-            Bool => ps!(WireTypeVarint, Value::Bool, I::read_bool),
-            Int32 => ps!(WireTypeVarint, Value::I32, I::read_int32),
-            Int64 => ps!(WireTypeVarint, Value::I64, I::read_int64),
-            SInt32 => ps!(WireTypeVarint, Value::I32, I::read_sint32),
-            SInt64 => ps!(WireTypeVarint, Value::I64, I::read_sint64),
-            UInt32 => ps!(WireTypeVarint, Value::U32, I::read_uint32),
-            UInt64 => ps!(WireTypeVarint, Value::U64, I::read_uint64),
-            Fixed32 => ps!(WireTypeFixed32, 4, Value::U32, I::read_fixed32),
-            Fixed64 => ps!(WireTypeFixed64, 8, Value::U64, I::read_fixed64),
-            SFixed32 => ps!(WireTypeFixed32, 4, Value::I32, I::read_sfixed32),
-            SFixed64 => ps!(WireTypeFixed64, 8, Value::I64, I::read_sfixed64),
-            Float => ps!(WireTypeFixed32, 4, Value::F32, I::read_float),
-            Double => ps!(WireTypeFixed64, 8, Value::F64, I::read_double),
-            Bytes => ss!(WireTypeLengthDelimited, Value::Bytes, I::read_bytes),
-            String => ss!(WireTypeLengthDelimited, Value::String, I::read_string),
+            Bool => ps!(WireType::Varint, Value::Bool, I::read_bool),
+            Int32 => ps!(WireType::Varint, Value::I32, I::read_int32),
+            Int64 => ps!(WireType::Varint, Value::I64, I::read_int64),
+            SInt32 => ps!(WireType::Varint, Value::I32, I::read_sint32),
+            SInt64 => ps!(WireType::Varint, Value::I64, I::read_sint64),
+            UInt32 => ps!(WireType::Varint, Value::U32, I::read_uint32),
+            UInt64 => ps!(WireType::Varint, Value::U64, I::read_uint64),
+            Fixed32 => ps!(WireType::Fixed32, 4, Value::U32, I::read_fixed32),
+            Fixed64 => ps!(WireType::Fixed64, 8, Value::U64, I::read_fixed64),
+            SFixed32 => ps!(WireType::Fixed32, 4, Value::I32, I::read_sfixed32),
+            SFixed64 => ps!(WireType::Fixed64, 8, Value::I64, I::read_sfixed64),
+            Float => ps!(WireType::Fixed32, 4, Value::F32, I::read_float),
+            Double => ps!(WireType::Fixed64, 8, Value::F64, I::read_double),
+            Bytes => ss!(WireType::LengthDelimited, Value::Bytes, I::read_bytes),
+            String => ss!(WireType::LengthDelimited, Value::String, I::read_string),
             Enum(_) => self.merge_enum(input, wire_type),
             Message(ref m) => self.merge_message(input, descriptors, m, wire_type),
             Group => unimplemented!(),
@@ -195,7 +202,7 @@ impl Field {
     ) -> error::Result<()>
     where
         V: Fn(A) -> Value,
-        R: Fn(&mut protobuf::CodedInputStream<'a>) -> protobuf::ProtobufResult<A>,
+        R: Fn(&mut protobuf::CodedInputStream<'a>) -> protobuf::Result<A>,
     {
         if expected_wire_type == actual_wire_type {
             self.put(value_ctor(reader(input)?));
@@ -218,9 +225,9 @@ impl Field {
     ) -> error::Result<()>
     where
         V: Fn(A) -> Value,
-        R: Fn(&mut protobuf::CodedInputStream<'a>) -> protobuf::ProtobufResult<A>,
+        R: Fn(&mut protobuf::CodedInputStream<'a>) -> protobuf::Result<A>,
     {
-        if wire_format::WireType::WireTypeLengthDelimited == actual_wire_type {
+        if wire_format::WireType::LengthDelimited == actual_wire_type {
             let len = input.read_raw_varint64()?;
 
             let old_limit = input.push_limit(len)?;
@@ -247,7 +254,7 @@ impl Field {
         input: &mut protobuf::CodedInputStream,
         actual_wire_type: wire_format::WireType,
     ) -> error::Result<()> {
-        if wire_format::WireType::WireTypeVarint == actual_wire_type {
+        if wire_format::WireType::Varint == actual_wire_type {
             let v = input.read_raw_varint32()? as i32;
             self.put(Value::Enum(v));
             Ok(())
@@ -266,7 +273,7 @@ impl Field {
         message: &descriptor::MessageDescriptor,
         actual_wire_type: wire_format::WireType,
     ) -> error::Result<()> {
-        if wire_format::WireType::WireTypeLengthDelimited == actual_wire_type {
+        if wire_format::WireType::LengthDelimited == actual_wire_type {
             let len = input.read_raw_varint64()?;
             let mut msg = match *self {
                 Field::Singular(ref mut o) => {

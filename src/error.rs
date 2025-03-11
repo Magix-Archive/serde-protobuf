@@ -3,7 +3,6 @@ use std::fmt;
 use std::result;
 
 use protobuf;
-use protobuf::wire_format;
 use serde;
 use thiserror::Error;
 
@@ -15,7 +14,7 @@ pub type Result<A> = result::Result<A, Error>;
 pub enum Error {
     /// A native protobuf error.
     #[error("protobuf error")]
-    Protobuf(#[source] protobuf::ProtobufError),
+    Protobuf(#[source] protobuf::Error),
     /// The end of stream was reached.
     #[error("end of stream")]
     EndOfStream,
@@ -41,7 +40,7 @@ pub enum Error {
     #[error("bad wire type: {wire_type:?}")]
     BadWireType {
         /// The encountered wire type.
-        wire_type: wire_format::WireType,
+        wire_type: protobuf::rt::WireType,
     },
     /// A default value that can't be parsed was received.
     #[error("bad default value: {default_value:?}")]
@@ -64,8 +63,8 @@ pub type CompatResult<A> = result::Result<A, CompatError>;
 #[derive(Debug, Error)]
 pub struct CompatError(#[from] Error);
 
-impl From<protobuf::ProtobufError> for Error {
-    fn from(e: protobuf::ProtobufError) -> Self {
+impl From<protobuf::Error> for Error {
+    fn from(e: protobuf::Error) -> Self {
         Error::Protobuf(e)
     }
 }

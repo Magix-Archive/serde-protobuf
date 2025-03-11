@@ -359,7 +359,7 @@ impl Descriptors {
     /// Adds all types defined in the specified protocol buffer file descriptor to this registry.
     pub fn add_file_proto(&mut self, file_proto: &descriptor::FileDescriptorProto) {
         let path = if file_proto.has_package() {
-            format!(".{}", file_proto.get_package())
+            format!(".{}", file_proto.package())
         } else {
             "".to_owned()
         };
@@ -455,7 +455,7 @@ impl MessageDescriptor {
 
     /// Reads a message descriptor from a parsed Protobuf descriptor.
     pub fn from_proto(path: &str, proto: &descriptor::DescriptorProto) -> MessageDescriptor {
-        let name = format!("{}.{}", path, proto.get_name());
+        let name = format!("{}.{}", path, proto.name());
         let mut message_descriptor = MessageDescriptor::new(name);
 
         for field_proto in &proto.field {
@@ -518,7 +518,7 @@ impl EnumDescriptor {
 
     /// Reads an enum descriptor from a parsed Protobuf descriptor.
     pub fn from_proto(path: &str, proto: &descriptor::EnumDescriptorProto) -> EnumDescriptor {
-        let enum_name = format!("{}.{}", path, proto.get_name());
+        let enum_name = format!("{}.{}", path, proto.name());
 
         let mut enum_descriptor = EnumDescriptor::new(enum_name);
 
@@ -573,7 +573,7 @@ impl EnumValueDescriptor {
 
     /// Reads an enum value descriptor from a parsed Protobuf descriptor.
     pub fn from_proto(proto: &descriptor::EnumValueDescriptorProto) -> EnumValueDescriptor {
-        EnumValueDescriptor::new(proto.get_name().to_owned(), proto.get_number())
+        EnumValueDescriptor::new(proto.name().to_owned(), proto.number())
     }
 
     /// The name of the enum value.
@@ -700,14 +700,14 @@ impl FieldDescriptor {
 
     /// Reads a field descriptor from a parsed Protobuf descriptor.
     pub fn from_proto(proto: &descriptor::FieldDescriptorProto) -> FieldDescriptor {
-        let name = proto.get_name().to_owned();
-        let number = proto.get_number();
-        let field_label = FieldLabel::from_proto(proto.get_label());
+        let name = proto.name().to_owned();
+        let number = proto.number();
+        let field_label = FieldLabel::from_proto(proto.label());
         let field_type =
-            InternalFieldType::from_proto(proto.get_field_type(), proto.get_type_name());
+            InternalFieldType::from_proto(proto.type_(), proto.type_name());
         let default_value = if proto.has_default_value() {
             // TODO: report error?
-            parse_default_value(proto.get_default_value(), &field_type).ok()
+            parse_default_value(proto.default_value(), &field_type).ok()
         } else {
             None
         };

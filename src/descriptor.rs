@@ -58,9 +58,9 @@
 //! // Create a new message type
 //! let mut m = MessageDescriptor::new(".mypackage.Person");
 //! m.add_field(FieldDescriptor::new("name", 1, FieldLabel::Optional,
-//!                                  InternalFieldType::String, None));
+//!                                  InternalFieldType::String, None, true));
 //! m.add_field(FieldDescriptor::new("age", 2, FieldLabel::Optional,
-//!                                  InternalFieldType::Int32, None));
+//!                                  InternalFieldType::Int32, None, true));
 //!
 //! // Create a new enum type
 //! let mut e = EnumDescriptor::new(".mypackage.Color");
@@ -315,6 +315,7 @@ pub struct FieldDescriptor {
     field_label: FieldLabel,
     field_type: InternalFieldType,
     default_value: Option<value::Value>,
+    optional: bool
 }
 
 impl Descriptors {
@@ -684,6 +685,7 @@ impl FieldDescriptor {
         field_label: FieldLabel,
         field_type: InternalFieldType,
         default_value: Option<value::Value>,
+        optional: bool
     ) -> FieldDescriptor
     where
         S: Into<String>,
@@ -695,6 +697,7 @@ impl FieldDescriptor {
             field_label,
             field_type,
             default_value,
+            optional
         }
     }
 
@@ -711,8 +714,9 @@ impl FieldDescriptor {
         } else {
             None
         };
+        let optional = proto.proto3_optional() || field_label == FieldLabel::Optional;
 
-        FieldDescriptor::new(name, number, field_label, field_type, default_value)
+        FieldDescriptor::new(name, number, field_label, field_type, default_value, optional)
     }
 
     /// The name of the field.
@@ -749,6 +753,12 @@ impl FieldDescriptor {
     #[inline]
     pub fn default_value(&self) -> Option<&value::Value> {
         self.default_value.as_ref()
+    }
+
+    /// Whether the field is optional.
+    #[inline]
+    pub fn is_optional(&self) -> bool {
+        self.optional
     }
 }
 
